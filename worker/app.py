@@ -6,6 +6,7 @@ from enum import Enum
 from settings import get_settings
 from time import sleep
 from pathlib import Path
+from random import randint
 
 
 class JobStatusEnum(str, Enum):
@@ -136,7 +137,6 @@ def get_next_job(url: str) -> dict:
     job = response.json()["result"]
 
     if job == {}:
-        logger.debug("No new jobs available.")
         return {}
     if job["status"] != JobStatusEnum.IN_PROGRESS:
         logger.info(f"Job {job['uuid']} is not in_progress. Skipping.")
@@ -232,7 +232,11 @@ def main():
 
     while True:
         try:
-            sleep(5)
+            # Sleep for a random time between 5 and 10 seconds
+            # to avoid hammering the API broker.
+            sleep_time = randint(5, 10)
+            logger.debug(f"Sleeping for {sleep_time} seconds before checking for jobs.")
+            sleep(sleep_time)
 
             if not (job := get_next_job(api_broker_url)):
                 continue
