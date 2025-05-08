@@ -14,11 +14,30 @@ def get_jobs():
         return []
 
     for job in response.json()["result"]["jobs"]:
+        download = ""
+        if job["status"] == "completed":
+            download = f'<a href="{API_URL}/transcriber/{job["uuid"]}/result" target="_blank">Download</a>'
+
+        match job["status"]:
+            case "completed":
+                job_status = f'<span style="color: green; font-weight: bold;">{job["status"]}</span>'
+            case "pending":
+                job_status = f'<span style="color: orange; font-weight: bold;">{job["status"]}</span>'
+            case "failed":
+                job_status = f'<span style="color: red; font-weight: bold;">{job["status"]}</span>'
+            case "uploading":
+                job_status = f'<span style="color: blue; font-weight: bold;">{job["status"]}</span>'
+            case "in_progress":
+                job_status = f'<span style="color: orange; font-weight: bold;">{job["status"]}</span>'
+            case _:
+                job_status = job["status"]
+
         job_data = [
             job["uuid"],
             job["filename"],
             job["created_at"],
-            job["status"].upper(),
+            job_status,
+            download,
         ]
         jobs.append(job_data)
 
@@ -45,40 +64,6 @@ def upload_file(file, model, language):
         return f"Error: {response.json()['message']}"
 
     return f"File {file_name} uploaded successfully."
-
-
-def show_job_details(evt: gr.SelectData):
-    """
-    Show the details of a selected job in the accordion.
-    """
-    download_url = f"{API_URL}/transcriber/{evt.row_value[0]}/result"
-    delete_url = f"{API_URL}/transcriber/{evt.row_value[0]}"
-
-    job_details = f"""
- <div style="margin-top: 20px;">
-        <a href="{download_url}" target="_blank" style="
-            text-decoration: none;
-            background-color: #4CAF50;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 5px;
-            margin-right: 10px;
-            display: inline-block;
-        ">📥 Download</a>
-        <a href="{delete_url}" target="_blank" style="
-            text-decoration: none;
-            background-color: #e74c3c;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 5px;
-            display: inline-block;
-        ">🗑️ Delete</a>
-    </div>
-   """
-    return (
-        job_details,
-        gr.Accordion(open=True, visible=True),
-    )
 
 
 def job_download(job_id):
@@ -112,8 +97,15 @@ def main():
     Gradio app for uploading files to be transcribed, also a list of
     transcription jobs and their status.
     """
+    file_input = None
 
     with gr.Blocks(theme=gr.themes.Origin(), fill_height=True) as app:
+        with gr.Row():
+            gr.Markdown(
+                """
+                <h1 style="text-align: center;">SUNET Transcription Service</h1>
+                """
+            )
         with gr.Sidebar():
             with gr.Row():
                 file_input = gr.File(
@@ -139,25 +131,15 @@ def main():
                     outputs=status,
                 )
 
-        with gr.Row(scale=1, height="50%"):
-            job_list = gr.Dataframe(
-                get_jobs,
-                every=3,
-                headers=["Job ID", "File Name", "Created", "Status"],
-                datatype=["str", "str", "str", "str"],
-                interactive=False,
-            )
-
-        with gr.Accordion("Job Details", open=False, visible=False) as accordion:
-            # Create empty textboxes to be filled with job details
-            job_details = gr.HTML("Job details here.")
-
-        job_list.select(
-            show_job_details,
-            outputs=[
-                job_details,
-                accordion,
-            ],
+        gr.Dataframe(
+            get_jobs,
+            every=5,
+            headers=["Job ID", "File Name", "Created", "Status", "Download"],
+            datatype="html",
+            interactive=False,
+            static_columns=False,
+            column_widths=[2, 2, 2, 1, 1],
+            max_height=2000,
         )
 
     app.launch(share=False)
