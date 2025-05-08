@@ -77,7 +77,7 @@ def show_job_details(evt: gr.SelectData):
    """
     return (
         job_details,
-        gr.Accordion(open=True),
+        gr.Accordion(open=True, visible=True),
     )
 
 
@@ -116,40 +116,39 @@ def main():
     with gr.Blocks(theme=gr.themes.Origin(), fill_height=True) as app:
         with gr.Sidebar():
             with gr.Row():
-                with gr.Column(scale=1):
-                    file_input = gr.File(
-                        file_types=[".wav", ".mp3", ".flac", ".mp4"],
-                    )
-                    model = gr.Dropdown(
-                        label="Model",
-                        choices=["small", "base", "large"],
-                        value="base",
-                    )
-                    language = gr.Dropdown(
-                        label="Language",
-                        choices=["en", "sv"],
-                        value="sv",
-                    )
-                    status = gr.Textbox(
-                        label="Status", interactive=False, container=False
-                    )
-                    submit_button = gr.Button("Submit")
-                    submit_button.click(
-                        upload_file,
-                        inputs=[file_input, model, language],
-                        outputs=status,
-                    )
-        with gr.Accordion():
-            with gr.Row(scale=1, height="50%"):
-                job_list = gr.Dataframe(
-                    get_jobs,
-                    every=1,
-                    headers=["Job ID", "File Name", "Created", "Status"],
-                    datatype=["str", "str", "str", "str"],
-                    interactive=False,
+                file_input = gr.File(
+                    file_types=[".wav", ".mp3", ".flac", ".mp4"],
+                )
+                model = gr.Dropdown(
+                    label="Model",
+                    choices=["small", "base", "large"],
+                    value="base",
+                    filterable=False,
+                )
+                language = gr.Dropdown(
+                    label="Language",
+                    choices=["en", "sv"],
+                    value="sv",
+                    filterable=False,
+                )
+                status = gr.Textbox(label="Status", interactive=False, container=False)
+                submit_button = gr.Button("Submit")
+                submit_button.click(
+                    upload_file,
+                    inputs=[file_input, model, language],
+                    outputs=status,
                 )
 
-        with gr.Accordion("Job Details", open=False) as accordion:
+        with gr.Row(scale=1, height="50%"):
+            job_list = gr.Dataframe(
+                get_jobs,
+                every=3,
+                headers=["Job ID", "File Name", "Created", "Status"],
+                datatype=["str", "str", "str", "str"],
+                interactive=False,
+            )
+
+        with gr.Accordion("Job Details", open=False, visible=False) as accordion:
             # Create empty textboxes to be filled with job details
             job_details = gr.HTML("Job details here.")
 
