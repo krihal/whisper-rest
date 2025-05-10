@@ -3,6 +3,7 @@ import aiofiles
 from fastapi import (
     APIRouter,
     UploadFile,
+    Request,
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
@@ -46,8 +47,6 @@ async def transcribe(
 @router.post("/transcriber")
 async def transcribe_file(
     file: UploadFile,
-    language: str = "sv",
-    model_type: str = "base",
 ) -> JSONResponse:
     """
     Transcribe audio file.
@@ -57,8 +56,6 @@ async def transcribe_file(
     job = job_create(
         db_session,
         job_type=JobType.TRANSCRIPTION,
-        language=language,
-        model_type=model_type,
         filename=file.filename,
     )
 
@@ -74,7 +71,7 @@ async def transcribe_file(
         job = job_update(db_session, job["uuid"], status=JobStatus.FAILED, error=str(e))
         return JSONResponse(content={"result": {"error": str(e)}}, status_code=500)
 
-    job = job_update(db_session, job["uuid"], status=JobStatusEnum.PENDING)
+    job = job_update(db_session, job["uuid"], status=JobStatusEnum.UPLOADED)
 
     return JSONResponse(
         content={
@@ -89,18 +86,26 @@ async def transcribe_file(
 
 
 @router.put("/transcriber/{job_id}")
-async def update_transcription_status(job_id: str, status: JobStatus) -> JSONResponse:
+async def update_transcription_status(job_id: str, request: Request) -> JSONResponse:
     """
     Update the status of a transcription job.
     """
 
-    data = jsonable_encoder(status)
+    data = await request.json()
+    language = data.get("language")
+    model = data.get("model_type")
+    status = data.get("status")
+    error = data.get("error")
+
+    print(f"Job ID: {job_id}")
 
     job = job_update(
         db_session,
         job_id,
-        status=data.get("status"),
-        error=data.get("error"),
+        language=language,
+        model_type=model,
+        status=status,
+        error=error,
     )
 
     if not job:

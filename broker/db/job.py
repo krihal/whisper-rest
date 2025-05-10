@@ -78,6 +78,8 @@ def job_update(
     session: Session,
     uuid: str,
     status: Optional[JobStatusEnum] = None,
+    language: Optional[str] = None,
+    model_type: Optional[str] = None,
     error: Optional[str] = None,
 ) -> Optional[Job]:
     """
@@ -92,6 +94,10 @@ def job_update(
         job.status = status
     if error:
         job.error = error
+    if language:
+        job.language = language
+    if model_type:
+        job.model_type = model_type
 
     session.commit()
 
