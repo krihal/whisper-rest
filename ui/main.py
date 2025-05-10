@@ -2,6 +2,7 @@ from nicegui import ui
 import requests
 
 API_URL = "http://localhost:8000/api/v1"
+rows = []
 
 
 def get_jobs():
@@ -17,13 +18,13 @@ def get_jobs():
     for job in response.json()["result"]["jobs"]:
         match job["status"]:
             case "pending":
-                color = "text-yellow-6"
+                color = "text-yellow-8"
             case "completed":
-                color = "text-green-6"
+                color = "text-green-8"
             case "failed":
-                color = "text-red-6"
+                color = "text-red-8"
             case _:
-                color = "text-grey-6"
+                color = "text-blue-8"
 
         job_data = {
             "id": idx,
@@ -44,17 +45,19 @@ def get_jobs():
     return jobs
 
 
-def page_init():
+def page_init() -> None:
+    """
+    Initialize the page with a header and background color.
+    """
     ui.add_head_html("<style>body {background-color: #f6f5f6; }</style>")
 
-    # Header with slight shadow and nice background color
     with ui.header().classes("q-pa-md bg-white").style("width: 100%; height: 100px"):
         ui.label("SUNET Transcriber").classes("text-h4 q-my-md").style(
-            "font-weight: bold; color: #333; font-family: 'Arial', sans-serif;"
-        )
+            "font-weight: bold; color: #e57f2a; font-family: 'Verdana', sans-serif;"
+        ).on("click", lambda: ui.navigate.to("/"))
 
 
-def table_click(event):
+def table_click(event) -> None:
     """
     Handle the click event on the table rows.
     """
@@ -69,10 +72,12 @@ def table_click(event):
 
 
 @ui.page("/result")
-def result(uuid):
+def result(uuid: str) -> None:
+    """
+    Display the result of the transcription job.
+    """
     page_init()
 
-    # Get the filename for display
     response = requests.get(f"{API_URL}/transcriber/{uuid}/result")
 
     if response.status_code != 200:
@@ -80,13 +85,19 @@ def result(uuid):
         return
 
     with ui.card().style(
-        "background-color: white; width: 100%; align-self: center; border-radius: 10px; height: 100%;"
+        "background-color: white; width: 100%; align-self: center; border-radius: 10px; height: calc(100vh - 130px);"
     ):
+        with ui.row().classes("items-center q-mb-lg"):
+            ui.icon("record_voice_over").classes("text-primary text-h4 q-mr-md").style(
+                "width: 48px; height: 48px;"
+            )
+            with ui.column().classes("col"):
+                ui.label("Audio Transcription Result").classes(
+                    "text-h5 text-weight-medium q-mb-none"
+                )
+                ui.label(f"Job UUID: {uuid}").classes("text-caption text-grey")
 
-        def download():
-            ui.notify("Downloaded result.txt")
-
-        ui.button("Download Result", icon="download").on_click(download)
+        ui.separator().classes("q-my-md")
 
         with ui.editor().classes("col").style(
             "width: 100%; height: 400px; border-radius: 10px;"
@@ -95,7 +106,12 @@ def result(uuid):
 
 
 @ui.refreshable
-def table_jobs():
+def table_jobs() -> None:
+    """
+    Create a table to display the transcription jobs.
+    """
+    global rows
+
     columns = [
         {
             "name": "filename",
@@ -124,44 +140,44 @@ def table_jobs():
         },
     ]
 
-    table = ui.table(
-        columns=columns,
-        rows=get_jobs(),
-        selection="none",
-        pagination=20,
+    table = (
+        ui.table(
+            columns=columns,
+            rows=rows,
+            selection="none",
+            pagination=10,
+        )
+        .style("width: 100%; border-radius: 10px; height: calc(100vh - 130px);")
+        .on("rowClick", table_click)
     )
-    table.style("width: 100%; border-radius: 10px; height: 100%;")
-    table.on("rowClick", table_click)
-    table.style("height: calc(100vh - 120px);")
 
     with table.add_slot("top-left"):
         ui.label("My files").classes("text-h5 q-my-md")
     with table.add_slot("top-right"):
         with ui.row().classes("items-center gap-8"):
-            with ui.button("Upload").props("color=primary").on(
-                "click", lambda: ui.navigate.to("/upload")
-            ):
-                ui.icon("upload")
             with ui.input(placeholder="Search").props("type=search").bind_value(
                 table, "filter"
             ).add_slot("append"):
                 ui.icon("search")
+            with ui.button("Upload").props("color=primary").on(
+                "click", lambda: ui.navigate.to("/upload")
+            ):
+                ui.icon("upload")
 
 
 @ui.page("/transcribe")
-def transcribe(uuid):
+def transcribe(uuid: str) -> None:
+    """
+    Page to transcribe a file.
+    """
+
     page_init()
 
-    # Get the filename for display
     filename = uuid
 
     with ui.card().style(
-        "background-color: white; width: 100%; align-self: center; border-radius: 10px; height: 100%;"
-    ) as card:
-        # Make the card fill the height of the page
-        card.style("height: calc(100vh - 120px);")
-
-        # Header with icon
+        "background-color: white; width: 100%; align-self: center; border-radius: 10px; height: calc(100vh - 130px);"
+    ):
         with ui.row().classes("items-center q-mb-lg"):
             ui.icon("record_voice_over").classes("text-primary text-h4 q-mr-md").style(
                 "width: 48px; height: 48px;"
@@ -172,10 +188,8 @@ def transcribe(uuid):
                 )
                 ui.label(f"Job UUID: {filename}").classes("text-caption text-grey")
 
-        # Divider
         ui.separator().classes("q-my-md")
 
-        # Settings area
         with ui.card().classes("q-pa-md bg-grey-1").style("width: 100%;"):
             ui.label("Transcription Settings").classes(
                 "text-h6 q-mb-md text-primary"
@@ -206,16 +220,16 @@ def transcribe(uuid):
                         label="Select output format",
                     ).classes("w-full")
 
-        # Options area
-        with ui.expansion("Advanced Options", icon="settings").classes("q-mt-md"):
-            with ui.row().classes("q-col-gutter-md q-mt-sm"):
-                with ui.column().classes("col-12 col-sm-6"):
-                    ui.checkbox("Detect speaker changes").classes("q-mb-sm")
-                    ui.checkbox("Include timestamps").classes("q-mb-sm")
+            # Options area
+            with ui.expansion("Advanced Options", icon="settings").classes("q-mt-md"):
+                with ui.row().classes("q-col-gutter-md q-mt-sm"):
+                    with ui.column().classes("col-12 col-sm-6"):
+                        ui.checkbox("Detect speaker changes").classes("q-mb-sm")
+                        ui.checkbox("Include timestamps").classes("q-mb-sm")
 
-                with ui.column().classes("col-12 col-sm-6"):
-                    ui.checkbox("Filter background noise").classes("q-mb-sm")
-                    ui.checkbox("Auto-punctuate").classes("q-mb-sm")
+                    with ui.column().classes("col-12 col-sm-6"):
+                        ui.checkbox("Filter background noise").classes("q-mb-sm")
+                        ui.checkbox("Auto-punctuate").classes("q-mb-sm")
 
         # Action buttons
         with ui.row().classes("q-mt-lg justify-between"):
@@ -305,19 +319,27 @@ def transcribe(uuid):
 
 
 @ui.page("/upload")
-def upload():
+def upload() -> None:
+    """
+    Page to upload files for transcription.
+    """
+
     page_init()
 
-    # A box with white background
     with ui.card().style(
-        "background-color: white; width: 100%; align-self: center; border-radius: 10px; height: 100%;"
-    ) as card:
-        # Make the card fill the height of the page
-        card.style("height: calc(100vh - 120px);")
-        ui.label("Upload files").classes("text-h5 q-my-md")
+        "background-color: white; width: 100%; align-self: center; border-radius: 10px; height: calc(100vh - 130px);"
+    ):
+        # Header with icon
+        with ui.row().classes("items-center q-mb-lg"):
+            ui.icon("upload").classes("text-primary text-h4 q-mr-md").style(
+                "width: 48px; height: 48px;"
+            )
+            with ui.column().classes("col"):
+                ui.label("Upload files").classes("text-h5 text-weight-medium q-mb-none")
 
-        def handle_upload(file):
-            # Upload the file to the API
+        ui.separator().classes("q-my-md")
+
+        async def handle_upload(file):
             files = {"file": (file.name, file.content.read())}
             response = requests.post(f"{API_URL}/transcriber", files=files)
 
@@ -337,10 +359,9 @@ def upload():
             max_files=5,
             label="Upload file",
         ).classes("q-mt-md q-mb-md").style(
-            "width: 50%; align-self: center; border-radius: 10px;"
+            "width: 75%; align-self: center; border-radius: 10px; height: 75%;"
         )
 
-        # Create help text for the upload box
         ui.label(
             "You can upload multiple audio files at once. Supported formats: MP3, WAV, OGG, MP4 etc."
         ).classes("text-caption text-grey-6").style(
@@ -349,11 +370,26 @@ def upload():
 
 
 @ui.page("/")
-def index():
+def index() -> None:
+    """
+    Main page of the application.
+    """
+    global rows
+
+    rows = get_jobs()
     page_init()
     table_jobs()
 
-    ui.timer(5.0, table_jobs.refresh)
+    def update_table():
+        global rows
+
+        new_rows = get_jobs()
+
+        if new_rows != rows:
+            rows = new_rows
+            table_jobs.refresh()
+
+    ui.timer(5.0, update_table)
 
 
 ui.run(storage_secret="secret", title="SUNET Transcriber", port=8080)
