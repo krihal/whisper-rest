@@ -15,7 +15,7 @@ from db.job import (
     job_update,
     job_get_next,
 )
-from db.models import JobStatus, JobType, JobStatusEnum
+from db.models import JobStatus, JobType, JobStatusEnum, OutputFormatEnum
 from typing import Optional
 from settings import get_settings
 from pathlib import Path
@@ -57,6 +57,7 @@ async def transcribe_file(
         db_session,
         job_type=JobType.TRANSCRIPTION,
         filename=file.filename,
+        output_format=OutputFormatEnum.SRT,
     )
 
     try:
@@ -93,11 +94,16 @@ async def update_transcription_status(job_id: str, request: Request) -> JSONResp
 
     data = await request.json()
     language = data.get("language")
-    model = data.get("model_type")
+    model = data.get("model")
     status = data.get("status")
+    output_format = data.get("output_format")
     error = data.get("error")
 
     print(f"Job ID: {job_id}")
+    print(f"Language: {language}")
+    print(f"Model: {model}")
+    print(f"Status: {status}")
+    print(f"Output Format: {output_format}")
 
     job = job_update(
         db_session,
@@ -105,6 +111,7 @@ async def update_transcription_status(job_id: str, request: Request) -> JSONResp
         language=language,
         model_type=model,
         status=status,
+        output_format=output_format,
         error=error,
     )
 
@@ -217,9 +224,18 @@ async def get_transcription_result(job_id: str) -> FileResponse:
             content={"result": {"error": "Job not found"}}, status_code=404
         )
 
-    file_path = Path(api_file_storage_dir) / f"{job_id}.srt"
-
-    print(f"File path: {file_path}")
+    match job["output_format"]:
+        case OutputFormatEnum.TXT:
+            file_path = Path(api_file_storage_dir) / f"{job['uuid']}.txt"
+        case OutputFormatEnum.SRT:
+            file_path = Path(api_file_storage_dir) / f"{job['uuid']}.srt"
+        case OutputFormatEnum.CSV:
+            file_path = Path(api_file_storage_dir) / f"{job['uuid']}.csv"
+        case _:
+            return JSONResponse(
+                content={"result": {"error": "Unsupported output format"}},
+                status_code=400,
+            )
 
     if not file_path.exists():
         return {"result": {"error": "File not found"}}

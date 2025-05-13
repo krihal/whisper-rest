@@ -246,7 +246,7 @@ class SRTEditor:
                 self.video.seek(self.parse_time(time).total_seconds())
 
         with ui.card().classes("w-full no-shadow no-border "):
-            with ui.row().classes("w-full no-shadow no-border ") as row:
+            with ui.row().classes("w-full no-shadow no-border "):
                 with ui.row().classes("w-full items-center gap-2"):
                     start_time = ui.input(
                         label="Start time", value=entry["start_time"]
@@ -320,7 +320,7 @@ class SRTEditor:
 
 
 def create() -> None:
-    @ui.page("/result")
+    @ui.page("/srt")
     def result(uuid: str, filename: str) -> None:
         """
         Display the result of the transcription job.

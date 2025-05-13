@@ -1,6 +1,7 @@
 import logging
 import requests
 import subprocess
+import traceback
 
 from enum import Enum
 from settings import get_settings
@@ -88,27 +89,22 @@ def transcode_file(filename: str):
     return True
 
 
-def transcribe_file(filename: str, language: str, model: str):
+def transcribe_file(filename: str, language: str, model: str, output_format: str):
     """
     Transcribe the audio file using whisper.cpp, we expect the executable
     to be in PATH.
     """
-    srt_file = filename.replace(".wav", "")
-
-    if not filename.endswith(".wav"):
-        filename += ".wav"
-
     command = [
         "whisper.cpp",
         "-l",
         language,
-        "-osrt",
+        f"-o{output_format.lower()}",
         "-of",
-        str(Path(api_file_storage_dir) / srt_file),
+        str(Path(api_file_storage_dir) / filename),
         "-m",
         model,
         "-f",
-        str(Path(api_file_storage_dir) / filename),
+        str(Path(api_file_storage_dir) / f"{filename}.wav"),
     ]
 
     try:
@@ -124,7 +120,7 @@ def transcribe_file(filename: str, language: str, model: str):
         logger.error(f"Error during transcription: {e}")
         raise e
     else:
-        logger.info(f"Transcription completed: {srt_file}")
+        logger.info(f"Transcription completed: {filename}")
 
     return True
 
@@ -181,16 +177,12 @@ def put_status(uuid: str, status: JobStatusEnum, error: str) -> bool:
     return True
 
 
-def put_file(uuid: str) -> bool:
+def put_file(uuid: str, output_format: str) -> bool:
     """
     Upload the file to the API broker.
     """
-    srt_file = uuid.replace(".wav", ".srt")
 
-    if ".srt" not in srt_file:
-        srt_file = uuid + ".srt"
-
-    file_path = Path(api_file_storage_dir) / srt_file
+    file_path = Path(api_file_storage_dir) / f"{uuid}.{output_format}"
     with open(file_path, "rb") as fd:
         response = requests.put(f"{api_url}/{uuid}/result", files={"file": fd})
         response.raise_for_status()
@@ -246,6 +238,13 @@ def main():
             language = job["language"]
             model_type = job["model_type"]
             model = get_model(model_type, language)
+            output_format = job["output_format"]
+
+            logger.info(f"Processing job {uuid}:")
+            logger.info(f"  Language: {language}")
+            logger.info(f"  Model Type: {model_type}")
+            logger.info(f"  Model: {model}")
+            logger.info(f"  Output Format: {output_format}")
 
             # Download the file
             get_file(uuid)
@@ -254,10 +253,10 @@ def main():
             transcode_file(uuid)
 
             # Transcribe the file
-            transcribe_file(uuid, language, model)
+            transcribe_file(uuid, language, model, output_format)
 
             # Upload the resulting SRT
-            put_file(f"{uuid}")
+            put_file(f"{uuid}", output_format)
 
             logger.info(f"Job {uuid} completed successfully.")
         except requests.exceptions.ConnectionError as e:
@@ -269,6 +268,7 @@ def main():
         except Exception as e:
             put_status(uuid, JobStatusEnum.FAILED, error=str(e))
             logger.error(f"Error processing job {uuid}: {e}")
+            traceback.print_exc()
             continue
 
 

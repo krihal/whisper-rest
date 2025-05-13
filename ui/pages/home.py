@@ -3,7 +3,7 @@ from pages.common import page_init, get_jobs, table_click
 
 
 @ui.refreshable
-def table_jobs() -> None:
+def create_table_jobs() -> None:
     """
     Create a table to display the transcription jobs.
     """
@@ -27,6 +27,12 @@ def table_jobs() -> None:
             "name": "created_at",
             "label": "Updated At",
             "field": "updated_at",
+            "align": "left",
+        },
+        {
+            "name": "format",
+            "label": "Format",
+            "field": "format",
             "align": "left",
         },
         {
@@ -55,7 +61,21 @@ def table_jobs() -> None:
         "body-cell-status",
         """
         <q-td key="status" :props="props">
-            <q-badge v-if="{Completed: 'green', Uploaded: 'orange', Failed: 'red', Started: 'orange', Pending: 'blue'}[props.value]" :color="{Completed: 'green', Uploaded: 'orange', Failed: 'red', Started: 'orange', Pending: 'blue'}[props.value]">
+            <q-badge v-if="{Completed: 'green', Uploaded: 'orange', Failed: 'red', Transcribing: 'orange', Pending: 'blue'}[props.value]" :color="{Completed: 'green', Uploaded: 'orange', Failed: 'red', Transcribing: 'orange', Pending: 'blue'}[props.value]">
+                {{props.value}}
+            </q-badge>
+            <p v-else>
+                {{props.value}}
+            </p>
+        </q-td>
+        """,
+    )
+
+    table.add_slot(
+        "body-cell-format",
+        """
+        <q-td key="format" :props="props">
+            <q-badge v-if="{SRT: 'blue', TXT: 'grey'}[props.value]" :color="{SRT: 'blue', TXT: 'grey'}[props.value]">
                 {{props.value}}
             </q-badge>
             <p v-else>
@@ -93,7 +113,7 @@ def create() -> None:
 
         rows = get_jobs()
         page_init()
-        table_jobs()
+        create_table_jobs()
 
         def update_table():
             global rows
@@ -102,6 +122,6 @@ def create() -> None:
 
             if new_rows != rows:
                 rows = new_rows
-                table_jobs.refresh()
+                create_table_jobs.refresh()
 
         ui.timer(5.0, update_table)

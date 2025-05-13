@@ -39,8 +39,8 @@ def create() -> None:
 
                     with ui.column().classes("col-12 col-sm-6"):
                         ui.label("Output format").classes("text-subtitle2 q-mb-sm")
-                        ui.select(
-                            ["SRT", "Text"],
+                        output_format = ui.select(
+                            ["SRT", "TXT"],
                             label="Select output format",
                         ).classes("w-full")
 
@@ -81,8 +81,12 @@ def create() -> None:
                 "w-full"
             ).on(
                 "click",
-                start_transcription,
-                args=(language.value, model.value, filename, uuid),
+                lambda e: start_transcription(
+                    uuid,
+                    language.value,
+                    model.value,
+                    output_format.value,
+                ),
             )
             ui.button(
                 "Cancel transcription",

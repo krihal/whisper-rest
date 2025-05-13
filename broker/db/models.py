@@ -26,6 +26,16 @@ class JobStatus(BaseModel):
     error: Optional[str] = None
 
 
+class OutputFormatEnum(str, Enum):
+    """
+    Enum representing the output format of the transcription.
+    """
+
+    TXT = "txt"
+    SRT = "srt"
+    CSV = "csv"
+
+
 class JobType(str, Enum):
     """
     Enum representing the type of job.
@@ -71,6 +81,11 @@ class Job(SQLModel, table=True):
     model_type: str = Field(default="base", description="Model type used for the job")
     error: Optional[str] = Field(default=None, description="Error message if any")
     filename: str = Field(default="", description="Filename of the audio file")
+    output_format: OutputFormatEnum = Field(
+        default=OutputFormatEnum.TXT,
+        sa_column=Field(sa_column=SQLAlchemyEnum(OutputFormatEnum)),
+        description="Output format of the transcription",
+    )
 
     def as_dict(self) -> dict:
         """
@@ -88,6 +103,7 @@ class Job(SQLModel, table=True):
             "language": self.language,
             "model_type": self.model_type,
             "filename": self.filename,
+            "output_format": self.output_format,
             "error": self.error,
         }
 

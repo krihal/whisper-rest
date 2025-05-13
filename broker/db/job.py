@@ -11,12 +11,14 @@ def job_create(
     language: Optional[str] = "",
     model_type: Optional[str] = "",
     filename: Optional[str] = "",
+    output_format: Optional[str] = "",
 ) -> dict:
     job = Job(
         job_type=job_type,
         language=language,
         model_type=model_type,
         status=JobStatusEnum.UPLOADING,
+        output_format=output_format,
         filename=filename,
     )
 
@@ -80,6 +82,7 @@ def job_update(
     status: Optional[JobStatusEnum] = None,
     language: Optional[str] = None,
     model_type: Optional[str] = None,
+    output_format: Optional[str] = None,
     error: Optional[str] = None,
 ) -> Optional[Job]:
     """
@@ -98,6 +101,8 @@ def job_update(
         job.language = language
     if model_type:
         job.model_type = model_type
+    if output_format:
+        job.output_format = output_format
 
     session.commit()
 

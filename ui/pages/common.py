@@ -31,7 +31,13 @@ def get_jobs():
 
     for idx, job in enumerate(response.json()["result"]["jobs"]):
         if job["status"] == "in_progress":
-            job["status"] = "started"
+            job["status"] = "transcribing"
+
+        if job["status"] != "completed":
+            output_format = ""
+        else:
+            output_format = job["output_format"].upper()
+
         job_data = {
             "id": idx,
             "uuid": job["uuid"],
@@ -39,6 +45,7 @@ def get_jobs():
             "created_at": job["created_at"],
             "updated_at": job["updated_at"],
             "status": job["status"].capitalize(),
+            "format": output_format,
         }
 
         jobs.append(job_data)
@@ -53,18 +60,30 @@ def table_click(event) -> None:
     """
     Handle the click event on the table rows.
     """
-    status = event.args[1]["status"]
+    status = event.args[1]["status"].lower()
     uuid = event.args[1]["uuid"]
     filename = event.args[1]["filename"]
+    output_format = event.args[1]["format"]
 
-    match status.lower():
-        case "completed":
-            ui.navigate.to(f"/result?uuid={uuid}&filename={filename}")
-        case _:
-            ui.navigate.to(f"/transcribe?uuid={uuid}")
+    if status != "completed":
+        ui.navigate.to(f"/transcribe?uuid={uuid}")
+    else:
+        match output_format.lower():
+            case "srt":
+                ui.navigate.to(f"/srt?uuid={uuid}&filename={filename}")
+            case "txt":
+                ui.navigate.to(f"/txt?uuid={uuid}&filename={filename}")
+            case _:
+                ui.notify(
+                    "Error: Unsupported output format",
+                    type="negative",
+                    position="top",
+                )
 
 
-def start_transcription(language, model, filename, uuid) -> None:
+def start_transcription(
+    uuid: str, language: str, model: str, output_format: str
+) -> None:
     # Get selected values
     selected_language = language
     selected_model = model
@@ -97,6 +116,8 @@ def start_transcription(language, model, filename, uuid) -> None:
             )
             return
 
+    output_format = output_format.lower()
+
     # Start the transcription job
     try:
         response = requests.put(
@@ -105,6 +126,7 @@ def start_transcription(language, model, filename, uuid) -> None:
             json={
                 "language": f"{selected_language}",
                 "model": f"{selected_model}",
+                "output_format": f"{output_format}",
                 "status": "pending",
             },
         )
@@ -118,12 +140,6 @@ def start_transcription(language, model, filename, uuid) -> None:
             )
             return
 
-        ui.notify(
-            f"Transcription started for {filename}",
-            type="positive",
-            position="top",
-            icon="check_circle",
-        )
         ui.navigate.to("/home")
 
     except Exception as e:
