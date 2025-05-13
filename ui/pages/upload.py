@@ -21,15 +21,14 @@ def create() -> None:
         ).classes("w-full no-shadow no-border"):
 
             async def handle_upload(file):
-                files = {"file": (file.name, file.content.read())}
-                response = requests.post(f"{API_URL}/transcriber", files=files)
-
-                if response.status_code != 200:
-                    ui.notify(f"Error: Failed to upload file {file.name}")
-                    return
-
-                # Also save the file to the server
                 try:
+                    files = {"file": (file.name, file.content.read())}
+                    response = requests.post(f"{API_URL}/transcriber", files=files)
+
+                    if response.status_code != 200:
+                        ui.notify(f"Error: Failed to upload file {file.name}")
+                        return
+
                     with open(f"static/{file.name}", "wb") as f:
                         file.content.seek(0)
                         f.write(file.content.read())

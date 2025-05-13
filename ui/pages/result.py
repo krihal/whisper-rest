@@ -156,6 +156,25 @@ class SRTEditor:
         """Save and return the generated SRT content."""
         return self.generate_srt()
 
+    async def seek_caption(self, e) -> None:
+        """
+        Select the caption based on the time.
+        This function is called when the video is seeked.
+        """
+
+        current_time = await ui.run_javascript(f'getHtmlElement("{self.video.id}").currentTime')
+
+        # Select the caption based on the current time
+        for i, entry in enumerate(self.entries):
+            start_time = self.parse_time(entry["start_time"])
+            end_time = self.parse_time(entry["end_time"])
+
+            if start_time.total_seconds() <= current_time <= end_time.total_seconds():
+                # Focus entry["textarea"]
+                #ui.run_javascript(f'getElement({entry["textarea"].id}).$refs.qRef.focus()')
+                # scrollIntoView
+                await ui.run_javascript(f'getHtmlElement("{entry["textarea"].id}").scrollIntoView()')
+
     def create_ui(self) -> None:
         """Create the UI elements."""
 
@@ -174,6 +193,9 @@ class SRTEditor:
                     f"/static/{self.filename}",
                     autoplay=False,
                     controls=True).classes("h-64").style("margin-top: 20px;")
+
+                # On video seek select the caption 
+                self.video.on("click", lambda e: self.seek_caption(e))
 
 
     def refresh_ui(self) -> None:
@@ -251,7 +273,7 @@ class SRTEditor:
                         # self.save_srt()
 
                     srt_caption = ui.textarea(label="Caption", value=entry["text"]).classes("flex-grow").props("input-class=h-8").on("click", lambda: seek_video(entry["start_time"]))
-
+                    entry["textarea"] = srt_caption
                     
                 with ui.column().style("margin-left: auto;"):
                     with ui.row():

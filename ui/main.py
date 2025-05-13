@@ -18,10 +18,8 @@ def index() -> None:
     """
 
     with ui.card().style(
-        "background-color: white; width: 50%; align-self: center; border-radius: 10px; height: calc(100vh - 50%);"
-    ) as card:
-        # Move card a bit down on the page
-        card.style("margin-top: 10%;")
+        "width: 50%; align-self: center; height: calc(100vh - 50%); margin-top: 10%;"
+    ):
         ui.label("Welcome to SUNET Transcriber").classes(
             "text-h5 text-weight-medium q-mb-none"
         )
@@ -31,7 +29,7 @@ def index() -> None:
         with ui.row().classes("q-col-gutter-md q-mt-sm").style(
             "align -items: center; justify-content: center;"
         ):
-            with ui.column().classes("col-12 col-sm-6"):
+            with ui.column():
                 username = ui.input(label="Username", placeholder="Enter your username")
             with ui.column().classes("col-12 col-sm-6"):
                 password = ui.input(
