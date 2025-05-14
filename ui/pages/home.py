@@ -1,5 +1,11 @@
 from nicegui import ui
-from pages.common import page_init, get_jobs, table_click
+from pages.common import (
+    page_init,
+    get_jobs,
+    table_click,
+    table_transcribe,
+    table_upload,
+)
 
 
 @ui.refreshable
@@ -56,6 +62,7 @@ def create_table_jobs() -> None:
         .on("rowClick", table_click)
         .classes("text-h2")
     ).props("dense hover")
+    table.set_selection("multiple")
 
     table.add_slot(
         "body-cell-status",
@@ -89,15 +96,19 @@ def create_table_jobs() -> None:
         ui.label("My files").classes("text-h5 q-my-md")
 
     with table.add_slot("top-right"):
-        with ui.row().classes("items-center gap-8"):
+        with ui.row().classes("items-center gap-2"):
             with ui.input(placeholder="Search").props("type=search").bind_value(
                 table, "filter"
             ).add_slot("append"):
                 ui.icon("search")
             with ui.button("Upload") as upload:
                 upload.props("color=primary")
-                upload.on("click", lambda: ui.navigate.to("/upload"))
+                upload.on("click", lambda: table_upload(table))
                 ui.icon("upload")
+            with ui.button("Transcribe") as transcribe:
+                transcribe.props("color=primary")
+                transcribe.on("click", lambda: table_transcribe(table), table.selected)
+                ui.icon("play_circle_filled")
 
 
 rows = []

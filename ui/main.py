@@ -1,14 +1,10 @@
 from nicegui import ui
-from pages.upload import create as create_upload
-from pages.transcribe import create as create_transcribe
 from pages.srt import create as create_srt
 from pages.home import create as create_files_table
 from pages.txt import create as create_txt
 
 # Create the pages
 create_files_table()
-create_upload()
-create_transcribe()
 create_srt()
 create_txt()
 

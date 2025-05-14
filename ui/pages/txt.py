@@ -22,9 +22,13 @@ def txt_editor(data):
     """
     Create a text editor with the given data.
     """
-    editor = ui.editor(
-        value=data,
-    ).style("width: 100%; height: calc(100vh - 100px); white-space: pre-wrap;")
+    editor = (
+        ui.editor(
+            value=data,
+        )
+        .style("width: 100%; height: calc(100vh - 100px); white-space: pre-wrap;")
+        .classes("no-border no-shadow")
+    )
 
     return editor
 
@@ -45,17 +49,10 @@ def create() -> None:
         data = response.content.decode("utf-8")
 
         page_init()
-
         txt_editor(data)
 
-        with ui.left_drawer(fixed=True):
+        with ui.left_drawer(fixed=True).style("background-color: white;"):
             with ui.row().classes("justify-end"):
-                ui.button(
-                    "My files",
-                    icon="arrow_back",
-                    color="primary",
-                    on_click=lambda: ui.navigate.to("/home"),
-                ).classes("w-full")
                 ui.button(
                     "Export",
                     icon="save",
