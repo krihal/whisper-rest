@@ -213,6 +213,68 @@ def get_model(model_type: str, language: str) -> str:
     return f"{file_path}.bin"
 
 
+def postprocess_srt(uuid: str, output_format: str) -> bool:
+    """
+    Postprocess the SRT file to remove unwanted characters.
+    """
+
+    # Timing based on reading speed
+    # • Default reading speed: 160–180 words per minute.
+    # • Minimum display time: 1.5 seconds, to avoid flickering subtitles.
+
+    # Audio-sync and natural timing
+    # • Subtitle should ideally appear 0.5 seconds before speech and remain at least 1 second after the final word.
+    # • If possible, adjust timestamps for natural rhythm in relation to spoken tempo.
+
+    # Export in professional formats
+    # • Primary export to .srt.
+    # • Support for .vtt or possibly .json if needed for further processing.
+
+    if output_format != "srt":
+        return False
+
+    srt_path = Path(api_file_storage_dir) / f"{uuid}.srt"
+    with open(srt_path, "r") as f:
+        content = f.read()
+
+    for line in content.splitlines():
+        if len(line) > 42:
+            # Split line into two lines if longer than 42 characters
+            split_line = line[:42] + "\n" + line[42:]
+            content = content.replace(line, split_line)
+
+    # • Avoid line breaks in the middle of names or fixed expressions.
+    # Remove unwanted characters
+
+    with open(srt_path, "w") as f:
+        f.write(content)
+
+    logger.info(f"Postprocessing completed for {uuid}.srt")
+    return True
+
+
+def delete_files(uuid: str) -> bool:
+    """
+    Delete all files related to the job.
+    """
+    file_path = Path(api_file_storage_dir) / uuid
+    if file_path.exists():
+        file_path.unlink()
+        logger.info(f"Deleted file {file_path}")
+
+    wav_file_path = Path(api_file_storage_dir) / f"{uuid}.wav"
+    if wav_file_path.exists():
+        wav_file_path.unlink()
+        logger.info(f"Deleted file {wav_file_path}")
+
+    srt_file_path = Path(api_file_storage_dir) / f"{uuid}.srt"
+    if srt_file_path.exists():
+        srt_file_path.unlink()
+        logger.info(f"Deleted file {srt_file_path}")
+
+    return True
+
+
 def main():
     """
     Main function to fetch jobs and process them.
@@ -255,8 +317,14 @@ def main():
             # Transcribe the file
             transcribe_file(uuid, language, model, output_format)
 
+            # Postprocess subtitles
+            # postprocess_srt(uuid, output_format)
+
             # Upload the resulting SRT
             put_file(f"{uuid}", output_format)
+
+            # Remove all files
+            delete_files(uuid)
 
             logger.info(f"Job {uuid} completed successfully.")
         except requests.exceptions.ConnectionError as e:
