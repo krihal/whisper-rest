@@ -217,9 +217,6 @@ def add_new_entry(index: int):
     for i, item in enumerate(data):
         item["index"] = i
 
-    for i, _ in enumerate(data):
-        print(f"Index: {i}, text: {data[i]['text']}")
-
     # Sort data by index
     data = sorted(data, key=lambda d: d["index"])
 
@@ -305,7 +302,7 @@ def show_edit_panel(event):
         with ui.row().style("margin-top: 20px;"):
             ui.button(
                 icon="add_circle",
-                on_click=lambda: add_new_entry(row["index"]),
+                on_click=lambda: add_new_entry(row["index"] + 1),
             ).props("color=primary")
             ui.button(
                 icon="delete",
@@ -338,8 +335,7 @@ def create() -> None:
         global data, edit_panel, video, table, table_page
         page_init()
 
-        app.add_static_files(url_path="/static", local_directory="static/")
-        response = requests.get(f"{API_URL}/transcriber/{uuid}/result")
+        response = requests.get(f"{API_URL}/api/v1/transcriber/{uuid}/result")
 
         if response.status_code != 200:
             ui.notify("Error: Failed to get result")
@@ -366,8 +362,12 @@ def create() -> None:
                     render_data_table()
 
             with splitter.after:
+                # Add transcription information
+                ui.label("Transcription Information").classes("text-h6 q-mb-md")
+                ui.separator()
+                print(f"{API_URL}/static/{uuid}")
                 video = ui.video(
-                    f"/static/{filename}",
+                    f"{API_URL}/static/{uuid}",
                     autoplay=False,
                     controls=True,
                     muted=False,

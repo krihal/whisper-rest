@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
 from routers.transcriber import router as transcriber_router
+from routers.static import router as static_router
 from settings import get_settings
 from db.job import job_cleanup
 from db.session import get_session
@@ -30,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(transcriber_router, prefix=settings.API_PREFIX, tags=["transcriber"])
+app.include_router(static_router, prefix="", tags=["static"])
 
 
 @app.get("/", response_class=RedirectResponse, include_in_schema=False)

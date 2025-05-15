@@ -28,7 +28,7 @@ settings = get_settings()
 
 api_broker_url = settings.API_BROKER_URL
 api_file_storage_dir = settings.API_FILE_STORAGE_DIR
-api_version = settings.API_VERSON
+api_version = settings.API_VERSION
 api_url = f"{api_broker_url}/api/{api_version}/transcriber"
 
 
@@ -130,8 +130,11 @@ def get_next_job(url: str) -> dict:
     """
     Get the next job from the API broker.
     """
+    print(f"{api_url}/next")
+
     response = requests.get(f"{api_url}/next")
     response.raise_for_status()
+
     job = response.json()["result"]
 
     if job == {}:

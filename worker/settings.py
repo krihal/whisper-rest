@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     API_BROKER_URL: str = "http://localhost:8000"
     API_FILE_STORAGE_DIR: str = "/tmp/downloads"
     TRANSCODER_FILE_STORAGE_DIR: str = "/tmp/transcoder"
-    API_VERSON: str = "v1"
+    API_VERSION: str = "v1"
     WORKERS: int = 2
 
 

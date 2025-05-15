@@ -61,7 +61,7 @@ async def transcribe_file(
     )
 
     try:
-        file_path = Path(api_file_upload_dir) / file.filename
+        file_path = Path(api_file_upload_dir) / job["uuid"]
         async with aiofiles.open(file_path, "wb") as out_file:
             while True:
                 chunk = await file.read(1024)

@@ -37,7 +37,7 @@ def create() -> None:
         """
 
         app.add_static_files(url_path="/static", local_directory="static/")
-        response = requests.get(f"{API_URL}/transcriber/{uuid}/result")
+        response = requests.get(f"{API_URL}/api/v1/transcriber/{uuid}/result")
 
         if response.status_code != 200:
             ui.notify("Error: Failed to get result")

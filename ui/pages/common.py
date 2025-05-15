@@ -1,4 +1,5 @@
 import requests
+import httpx
 from nicegui import ui
 from typing import Optional
 from settings import get_settings
@@ -43,7 +44,7 @@ def get_jobs():
     Get the list of transcription jobs from the API.
     """
     jobs = []
-    response = requests.get(f"{API_URL}/transcriber")
+    response = requests.get(f"{API_URL}/api/v1/transcriber")
     if response.status_code != 200:
         return []
 
@@ -100,24 +101,21 @@ def table_click(event) -> None:
             )
 
 
-async def upload_file(file):
+async def upload_file(files):
     try:
-        files = {"file": (file.name, file.content.read())}
-        response = requests.post(f"{API_URL}/transcriber", files=files)
+        for file, name in zip(files.contents, files.names):
+            files_json = {"file": (name, file.read())}
 
-        if response.status_code != 200:
-            ui.notify(f"Error: Failed to upload file {file.name}")
-            return
+            response = requests.post(f"{API_URL}/api/v1/transcriber", files=files_json)
 
-        with open(f"{STATIC_FILES}/{file.name}", "wb") as f:
-            file.content.seek(0)
-            f.write(file.content.read())
+            if response.status_code != 200:
+                ui.notify(f"Error: Failed to upload file {name}")
+                return
+
+            ui.notify(f"Uploaded: {name}")
     except Exception as e:
-        print(e)
-        ui.notify(f"Error: Failed to save file {file.name}: {e}")
+        ui.notify(f"Error: Failed to save file {name}: {e}")
         return
-
-    ui.notify(f"Uploaded: {file.name}")
 
 
 def table_upload(table) -> None:
@@ -125,23 +123,12 @@ def table_upload(table) -> None:
     Handle the click event on the Upload button.
     """
     with ui.dialog() as dialog:
-        with ui.card().style(
-            "background-color: white; align-self: center; border: 0; height: 50%;"
-        ).classes("w-full no-shadow no-border"):
-            ui.label("Upload files").classes("text-h6 q-mb-md text-primary")
-            ui.upload(
-                on_upload=lambda file: upload_file(file),
-                multiple=True,
-                max_files=5,
-                label="Upload file",
-            ).style(
-                "width: 100%; align-self: center; border-radius: 10px; height: 100%;"
-            )
-            ui.separator()
-            ui.button(
-                "Done",
-                icon="done",
-            ).on("click", lambda: dialog.close())
+        ui.upload(
+            on_multi_upload=lambda file: upload_file(file),
+            multiple=True,
+            max_files=5,
+            label="Upload file",
+        ).style("width: 100%; align-self: center; border-radius: 10px; height: 50%;")
 
         dialog.open()
 
@@ -256,7 +243,7 @@ def start_transcription(
         for row in rows:
             uuid = row["uuid"]
             response = requests.put(
-                f"{API_URL}/transcriber/{uuid}",
+                f"{API_URL}/api/v1/transcriber/{uuid}",
                 headers={"Content-Type": "application/json"},
                 json={
                     "language": f"{selected_language}",

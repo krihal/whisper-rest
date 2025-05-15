@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     )
 
     DEBUG: bool = True
-    API_URL: str = "http://localhost:8000/api/v1"
+    API_URL: str = "http://localhost:8000"
     STATIC_FILES: str = "static"
 
 
