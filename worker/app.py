@@ -2,6 +2,7 @@ import logging
 import requests
 import subprocess
 import traceback
+import threading
 
 from enum import Enum
 from settings import get_settings
@@ -275,22 +276,22 @@ def delete_files(uuid: str) -> bool:
     return True
 
 
-def main():
+def main(worker_id: int):
     """
     Main function to fetch jobs and process them.
     """
-    logger.info(f"Starting transcription service, server URL: {api_broker_url}")
-
-    if settings.DEBUG:
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Debug mode is enabled.")
+    logger.info(
+        f"[{worker_id}] Starting transcription service, server URL: {api_broker_url}"
+    )
 
     while True:
         try:
             # Sleep for a random time between 5 and 10 seconds
             # to avoid hammering the API broker.
             sleep_time = randint(5, 10)
-            logger.debug(f"Sleeping for {sleep_time} seconds before checking for jobs.")
+            logger.debug(
+                f"[{worker_id}] Sleeping for {sleep_time} seconds before checking for jobs."
+            )
             sleep(sleep_time)
 
             if not (job := get_next_job(api_broker_url)):
@@ -302,7 +303,7 @@ def main():
             model = get_model(model_type, language)
             output_format = job["output_format"]
 
-            logger.info(f"Processing job {uuid}:")
+            logger.info(f"[{worker_id}] Processing job {uuid}:")
             logger.info(f"  Language: {language}")
             logger.info(f"  Model Type: {model_type}")
             logger.info(f"  Model: {model}")
@@ -326,23 +327,31 @@ def main():
             # Remove all files
             delete_files(uuid)
 
-            logger.info(f"Job {uuid} completed successfully.")
+            logger.info(f"[{worker_id}] Job {uuid} completed successfully.")
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection error: {e}")
+            logger.error(f"[{worker_id}] Connection error: {e}")
             continue
         except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error: {e}")
+            logger.error(f"[{worker_id}] HTTP error: {e}")
             continue
         except Exception as e:
             put_status(uuid, JobStatusEnum.FAILED, error=str(e))
-            logger.error(f"Error processing job {uuid}: {e}")
+            logger.error(f"[{worker_id}] Error processing job {uuid}: {e}")
             traceback.print_exc()
             continue
 
 
 if __name__ == "__main__":
     try:
-        main()
+        if settings.DEBUG:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug mode is enabled.")
+
+        wokers = settings.WORKERS
+
+        for i in range(wokers):
+            thread = threading.Thread(target=main, args=(i,))
+            thread.start()
     except KeyboardInterrupt:
         print("")
         logger.info("Transcription service stopped.")
