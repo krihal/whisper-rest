@@ -153,7 +153,7 @@ def table_transcribe(table) -> None:
         ui.notify("Error: No files selected", type="negative", position="top")
         return
 
-    if not any(row["status"] == "uploaded" for row in selected_rows):
+    if not any(row["status"] == "Uploaded" for row in selected_rows):
         ui.notify(
             "Error: Selected files already transcribed",
             type="negative",
