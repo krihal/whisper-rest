@@ -1,322 +1,309 @@
-import re
 import requests
 from nicegui import ui, app
 from pages.common import page_init, API_URL
-from datetime import timedelta
-from typing import Dict, Any, Optional
+
+# Set up global state
+expanded_row = None  # Track which row is currently expanded
+edit_inputs = {}  # Store input elements for the currently edited row
+data = []
 
 
-class SRTEditor:
-    def __init__(self, srt_content: str = "", filename: Optional[str] = "") -> None:
-        """Initialize the SRT Editor with optional content."""
-        self.entries = []
-        self.result = {"srt_content": srt_content}
-        self.video = None
-        self.filename = filename
+def format_time(time_str):
+    """Format the time for display"""
+    parts = time_str.split(",")
+    if len(parts) == 2:
+        return f"{parts[0]}<span class='text-gray-500'>,{parts[1]}</span>"
+    return time_str
 
-        if srt_content:
-            self.parse_srt(srt_content)
+
+def is_valid_time(time_str):
+    """Validate the SRT timestamp format"""
+    try:
+        parts = time_str.split(",")
+        if len(parts) != 2:
+            return False
+
+        time_parts = parts[0].split(":")
+        if len(time_parts) != 3:
+            return False
+
+        hours, minutes, seconds = map(int, time_parts)
+        milliseconds = int(parts[1])
+
+        return (
+            0 <= hours <= 99
+            and 0 <= minutes <= 59
+            and 0 <= seconds <= 59
+            and 0 <= milliseconds <= 999
+        )
+    except:
+        return False
+
+
+def calculate_duration(start_time, end_time):
+    """Calculate duration between two timestamps"""
+    try:
+        # Parse start time
+        start_parts = start_time.split(",")
+        start_time_parts = start_parts[0].split(":")
+        start_h, start_m, start_s = map(int, start_time_parts)
+        start_ms = int(start_parts[1])
+        start_total_ms = ((start_h * 3600) + (start_m * 60) + start_s) * 1000 + start_ms
+
+        # Parse end time
+        end_parts = end_time.split(",")
+        end_time_parts = end_parts[0].split(":")
+        end_h, end_m, end_s = map(int, end_time_parts)
+        end_ms = int(end_parts[1])
+        end_total_ms = ((end_h * 3600) + (end_m * 60) + end_s) * 1000 + end_ms
+
+        # Calculate difference
+        diff_ms = end_total_ms - start_total_ms
+
+        # Format result
+        if diff_ms < 0:
+            return "Invalid (end before start)"
+
+        diff_s, ms = divmod(diff_ms, 1000)
+        diff_m, diff_s = divmod(diff_s, 60)
+
+        if diff_m > 0:
+            return f"{diff_m}m {diff_s}s {ms}ms"
         else:
-            # Add a default empty entry if no content is provided
-            self.entries.append(
+            return f"{diff_s}s {ms}ms"
+    except:
+        return "Invalid format"
+
+
+@ui.refreshable
+def render_data_table():
+    """Render the data table with expandable rows"""
+    global expanded_row, edit_inputs, data
+
+    with ui.card().classes("w-full no-shadow no-border"):
+        # No data message
+        if len(data) == 0:
+            with ui.row().classes("w-full p-8 text-center text-gray-500"):
+                ui.label('No subtitle entries. Click "Add New" to create one.').classes(
+                    "text-lg"
+                )
+
+        # Data rows
+        for index, item in enumerate(data):
+            is_expanded = expanded_row == item["index"]
+
+            # Main row - clickable to expand/collapse
+            with ui.row().classes(
+                "border-b p-2 hover:bg-gray-50 cursor-pointer"
+            ) as row:
+                row.on("click", lambda e, idx=item["index"]: toggle_expand(idx))
+
+                ui.label(f"{item['index']}").classes("w-16 font-mono")
+
+                with ui.element("div").classes("w-48"):
+                    ui.html(
+                        f"{format_time(item['start_time'])} → {format_time(item['end_time'])}"
+                    )
+
+                ui.label(item["text"]).classes("flex-grow truncate")
+
+            # Expanded content - shows when row is clicked
+            if is_expanded:
+                with ui.card().classes("bg-blue-50 p-4 mb-2"):
+                    # Display mode
+                    if not edit_inputs.get(item["index"]):
+                        with ui.row().classes("gap-4 w-full"):
+                            with ui.column().classes("w-full"):
+                                index_label = ui.label(f"{index + 1}")
+                                ui.label("Time Details").classes("font-bold")
+                                start_time = ui.input(
+                                    "Start time",
+                                    value=item["start_time"],
+                                )
+                                end_time = ui.input("End time", value=item["end_time"])
+                                ui.label(
+                                    f"Duration: {calculate_duration(item['start_time'], item['end_time'])}"
+                                )
+
+                            with ui.column().classes("w-full"):
+                                ui.label("Content").classes("font-bold")
+                                text = ui.textarea(value=item["text"]).classes(
+                                    "bg-white p-2 rounded w-full"
+                                )
+                                ui.label(
+                                    f"Characters: {len(item['text'])} | Words: {len(item['text'].split())}"
+                                )
+
+                        with ui.row().classes("justify-end mt-4"):
+                            ui.button(
+                                "Add new before",
+                                icon="add",
+                                on_click=lambda e: add_new_entry(
+                                    int(index_label.text) - 1
+                                ),
+                            )
+                            ui.button(
+                                "Add new after",
+                                icon="add",
+                                on_click=lambda e: add_new_entry(int(index_label.text)),
+                            )
+                            ui.button(
+                                "Save",
+                                icon="save",
+                                on_click=lambda e: save_edit(
+                                    int(index_label.text),
+                                    text.value,
+                                    start_time.value,
+                                    end_time.value,
+                                ),
+                            ).classes("bg-blue-500")
+                            delete_btn = ui.button(
+                                "Delete",
+                                icon="delete",
+                                color="negative",
+                                on_click=lambda e, idx=item["index"]: delete_entry(
+                                    int(index_label.text) - 1
+                                ),
+                            )
+                            delete_btn.on("click.stop")  # Stop propagation
+
+
+def toggle_expand(index):
+    """Toggle the expanded state of a row"""
+    global expanded_row
+
+    if expanded_row == index:
+        expanded_row = None
+    else:
+        expanded_row = index
+
+    render_data_table.refresh()
+
+
+def save_edit(index, text, start_time, end_time):
+    """Save the edited data"""
+    global edit_inputs, expanded_row, data
+
+    # Validate time formats
+    if not is_valid_time(start_time) or not is_valid_time(end_time):
+        ui.notify("Invalid time format! Use HH:MM:SS,mmm", type="negative")
+        return
+
+    # Find and update item
+    for item in data:
+        if item["index"] == index:
+            item["start_time"] = start_time
+            item["end_time"] = end_time
+            item["text"] = text
+            break
+
+    expanded_row = False
+
+    ui.notify("Changes saved successfully", type="positive")
+    render_data_table.refresh()
+
+
+def delete_entry(index):
+    """Delete an entry from the data"""
+    global expanded_row, edit_inputs, data
+
+    # Find the item to remove
+    for i, item in enumerate(data):
+        if item["index"] == index:
+            data.pop(i)
+            break
+
+    # Reset expanded row if it was deleted
+    if expanded_row == index:
+        expanded_row = None
+
+    # Remove from edit inputs if present
+    if index in edit_inputs:
+        del edit_inputs[index]
+
+    # Re-index remaining items
+    for i, item in enumerate(data):
+        item["index"] = i + 1
+
+    ui.notify("Entry deleted", type="info")
+    render_data_table.refresh()
+
+
+def add_new_entry(index: int):
+    """Add a new entry to the data"""
+    global data, expanded_row, edit_inputs
+
+    if index == -1:
+        index = 0
+
+    # Get default start time from the last entry end time if available
+    default_start = data[-1]["end_time"] if data else "00:00:00,000"
+
+    # Create new entry
+    new_entry = {
+        "index": None,
+        "start_time": default_start,
+        "end_time": default_start,
+        "text": "New subtitle text",
+    }
+
+    # Add to data to index position in list
+    data.insert(index, new_entry)
+
+    # Auto-expand and edit the new entry
+    expanded_row = index
+    edit_inputs[index] = {}
+
+    # Set new index for all items
+    for i, item in enumerate(data):
+        item["index"] = i
+
+    for i, _ in enumerate(data):
+        print(f"Index: {i}, text: {data[i]['text']}")
+
+    # Sort data by index
+    data = sorted(data, key=lambda d: d["index"])
+
+    expanded_row = None
+
+    render_data_table.refresh()
+
+
+def parse_srt(data):
+    """Parse SRT data into a structured format"""
+    parsed_data = []
+    lines = data.splitlines()
+
+    for i in range(0, len(lines), 4):
+        if i + 3 < len(lines):
+            index = int(lines[i])
+            time_range = lines[i + 1].split(" --> ")
+            start_time = time_range[0].strip()
+            end_time = time_range[1].strip()
+            text = lines[i + 2].strip()
+
+            parsed_data.append(
                 {
-                    "index": 1,
-                    "start_time": "00:00:00,000",
-                    "end_time": "00:00:05,000",
-                    "text": "",
+                    "index": index,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "text": text,
                 }
             )
 
-        # Set up the UI
-        self.create_ui()
-
-    def set_video(self, video: str) -> None:
-        """Set the video element for seeking."""
-        self.video = video
-
-    def parse_srt(self, srt_content: str) -> None:
-        """Parse SRT content into structured entries."""
-        self.entries = []
-
-        # Split by double newline (entry separator)
-        blocks = re.split(r"\n\s*\n", srt_content.strip())
-
-        for block in blocks:
-            if not block.strip():
-                continue
-
-            lines = block.strip().split("\n")
-            if len(lines) < 3:
-                continue
-
-            try:
-                index = int(lines[0])
-                time_line = lines[1]
-                text = "\n".join(lines[2:])
-
-                # Extract start and end times
-                time_match = re.match(
-                    r"(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})",
-                    time_line,
-                )
-                if time_match:
-                    start_time, end_time = time_match.groups()
-                    self.entries.append(
-                        {
-                            "index": index,
-                            "start_time": start_time,
-                            "end_time": end_time,
-                            "text": text,
-                        }
-                    )
-            except Exception as e:
-                print(f"Error parsing entry: {e}")
-
-    def validate_time_format(self, time_str: str) -> bool:
-        """Validate if the time string matches SRT format."""
-        pattern = r"^\d{2}:\d{2}:\d{2},\d{3}$"
-        return bool(re.match(pattern, time_str))
-
-    def parse_time(self, time_str: str) -> timedelta:
-        """Parse SRT time format to timedelta."""
-        hours, minutes, rest = time_str.split(":")
-        seconds, milliseconds = rest.split(",")
-
-        return timedelta(
-            hours=int(hours),
-            minutes=int(minutes),
-            seconds=int(seconds),
-            milliseconds=int(milliseconds),
-        )
-
-    def format_time(self, time_obj: timedelta) -> str:
-        """Format timedelta to SRT time format HH:MM:SS,mmm."""
-        total_seconds = int(time_obj.total_seconds())
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        milliseconds = int(time_obj.microseconds / 1000)
-
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
-
-    def generate_srt(self) -> str:
-        """Generate SRT content from entries."""
-        result = []
-
-        # Renumber entries
-        for i, entry in enumerate(self.entries, 1):
-            entry["index"] = i
-            result.append(
-                f"{entry['index']}\n{entry['start_time']} --> {entry['end_time']}\n{entry['text']}"
-            )
-
-        return "\n\n".join(result)
-
-    def add_entry(self, index: int) -> None:
-        """Add a new entry after the specified index."""
-        # Calculate position to insert the new entry
-        position = index + 1
-
-        # Default times based on previous entry
-        if 0 <= index < len(self.entries):
-            prev_entry = self.entries[index]
-            prev_end = self.parse_time(prev_entry["end_time"])
-            new_start = prev_end + timedelta(seconds=1)
-            new_end = new_start + timedelta(seconds=5)
-
-            start_time = self.format_time(new_start)
-            end_time = self.format_time(new_end)
-        else:
-            # Default values if no reference entry
-            start_time = "00:00:00,000"
-            end_time = "00:00:05,000"
-
-        # Create and insert the new entry
-        new_entry = {
-            "index": position,
-            "start_time": start_time,
-            "end_time": end_time,
-            "text": "",
-        }
-
-        self.entries.insert(position, new_entry)
-
-        # Refresh the UI
-        self.refresh_ui()
-
-    def remove_entry(self, index: int) -> None:
-        """Remove the entry at the specified index."""
-        if 0 <= index < len(self.entries) and len(self.entries) > 1:
-            self.entries.pop(index)
-            self.refresh_ui()
-        else:
-            ui.notify("Cannot remove the last caption", type="warning")
-
-    def save_srt(self) -> str:
-        """Save and return the generated SRT content."""
-        return self.generate_srt()
-
-    async def seek_caption(self, e) -> None:
-        """
-        Select the caption based on the time.
-        This function is called when the video is seeked.
-        """
-
-        current_time = await ui.run_javascript(f'getHtmlElement("{self.video.id}").currentTime')
-
-        # Select the caption based on the current time
-        for i, entry in enumerate(self.entries):
-            start_time = self.parse_time(entry["start_time"])
-            end_time = self.parse_time(entry["end_time"])
-
-            if start_time.total_seconds() <= current_time <= end_time.total_seconds():
-                # Focus entry["textarea"]
-                #ui.run_javascript(f'getElement({entry["textarea"].id}).$refs.qRef.focus()')
-                # scrollIntoView
-                await ui.run_javascript(f'getHtmlElement("{entry["textarea"].id}").scrollIntoView()')
-
-    def create_ui(self) -> None:
-        """Create the UI elements."""
-
-        # Sticky row with two buttons to the right: Revert and Export
-        with ui.header():
-            ui.label("Sunet Transcriber - SRT Editor").classes(
-                "text-h5 text-weight-medium q-mb-none"
-            )
-
-        with ui.row():
-            self.captions_container = ui.column()
-            self.refresh_ui()
-
-            with ui.page_sticky():
-                self.video = ui.video(
-                    f"/static/{self.filename}",
-                    autoplay=False,
-                    controls=True).classes("h-64").style("margin-top: 20px;")
-
-                # On video seek select the caption 
-                self.video.on("click", lambda e: self.seek_caption(e))
+    return parsed_data
 
 
-    def refresh_ui(self) -> None:
-        """Refresh the UI with current entries."""
+def export_srt():
+    """Export data in SRT format"""
+    srt_content = ""
+    for item in sorted(data, key=lambda x: x["index"]):
+        srt_content += f"{item['index']}\n"
+        srt_content += f"{item['start_time']} --> {item['end_time']}\n"
+        srt_content += f"{item['text']}\n\n"
 
-        # Clear existing captions
-        self.captions_container.clear()
-
-        # Add captions
-        with self.captions_container:
-            for i, entry in enumerate(self.entries):
-                self.create_caption_row(i, entry)
-
-    def revert_srt(self) -> None:
-        """Revert to the original SRT content."""
-        self.entries.clear()
-        self.parse_srt(self.result["srt_content"])
-        self.refresh_ui()
-
-    def create_caption_row(self, index: int, entry: Dict[str, Any]) -> None:
-        """Create a UI row for a caption entry."""
-
-        def on_start_time_change(e):
-            new_value = e.sender.value
-            if self.validate_time_format(new_value):
-                self.entries[index]["start_time"] = new_value
-            else:
-                ui.notify(
-                    "Invalid time format (HH:MM:SS,mmm)",
-                    type="negative",
-                )
-                e.sender.value = entry["start_time"]
-
-        def on_end_time_change(e):
-            new_value = e.sender.value
-            if self.validate_time_format(new_value):
-                self.entries[index]["end_time"] = new_value
-            else:
-                ui.notify(
-                    "Invalid time format (HH:MM:SS,mmm)",
-                    type="negative",
-                )
-                e.sender.value = entry["end_time"]
-
-        def seek_video(time: str) -> None:
-            if self.video:
-                print("Video")
-                self.video.seek(self.parse_time(time).total_seconds())
-
-        with ui.card().classes("w-full no-shadow no-border "):
-            with ui.row().classes("w-full no-shadow no-border "):
-                with ui.row().classes("w-full items-center gap-2"):
-                    start_time = ui.input(
-                        label="Start time", value=entry["start_time"]
-                    ).classes("w-24")
-                    start_time.on("change", on_start_time_change)
-                    start_time.on("click", lambda: seek_video(entry["start_time"]))
-
-                    end_time = ui.input(
-                        label="End time", value=entry["end_time"]
-                    ).classes("w-24")
-                    end_time.on("change", on_end_time_change)
-                    end_time.on("click", lambda: seek_video(entry["end_time"]))
-
-                    def save_srt_entry():
-                        for i in range(len(self.entries) - 1):
-                            if self.parse_time(
-                                self.entries[i]["end_time"]
-                            ) > self.parse_time(self.entries[i + 1]["start_time"]):
-                                ui.notify(f"Timestamps overlap for:\n{self.entries[i]["text"]}", type="negative")
-                                return
-
-                        new_value = srt_caption.value
-                        self.entries[index]["text"] = new_value
-                        # self.save_srt()
-
-                    srt_caption = ui.textarea(label="Caption", value=entry["text"]).classes("flex-grow").props("input-class=h-8").on("click", lambda: seek_video(entry["start_time"]))
-                    entry["textarea"] = srt_caption
-                    
-                with ui.column().style("margin-left: auto;"):
-                    with ui.row():
-                        ui.button(
-                            icon="arrow_upward",
-                            on_click=lambda: self.move_entry(index, -1),
-                        ).props("flat dense").tooltip("Move Up").classes("right").style(
-                            "margin-left: auto;"
-                        )
-
-                        ui.button(
-                            icon="arrow_downward",
-                            on_click=lambda: self.move_entry(index, 1),
-                        ).props("flat dense").tooltip("Move Down").classes("right")
-                        ui.button(
-                            icon="add",
-                            color="positive",
-                            on_click=lambda: self.add_entry(index),
-                        ).props("flat dense").tooltip("Add After").classes("right")
-                        ui.button(
-                            icon="delete",
-                            color="negative",
-                            on_click=lambda: self.remove_entry(index),
-                        ).props("flat dense").tooltip("Remove").classes("right")
-                        ui.button(
-                            icon="save",
-                            color="primary",
-                            on_click=lambda: save_srt_entry(),
-                        ).props("flat dense").tooltip("Save")
-
-
-
-    def move_entry(self, index: int, direction: int) -> None:
-        """Move an entry up or down."""
-        new_index = index + direction
-
-        if 0 <= new_index < len(self.entries):
-            # Swap entries
-            self.entries[index], self.entries[new_index] = (
-                self.entries[new_index],
-                self.entries[index],
-            )
-            self.refresh_ui()
+    ui.download("subtitles.srt", srt_content)
+    ui.notify("SRT file ready for download", type="positive")
 
 
 def create() -> None:
@@ -325,6 +312,9 @@ def create() -> None:
         """
         Display the result of the transcription job.
         """
+        global data
+        page_init()
+
         app.add_static_files(url_path="/static", local_directory="static/")
         response = requests.get(f"{API_URL}/transcriber/{uuid}/result")
 
@@ -332,31 +322,34 @@ def create() -> None:
             ui.notify("Error: Failed to get result")
             return
 
-        srt = SRTEditor(response.content.decode(), filename)
+        data = response.content.decode()
+        data = parse_srt(data)
 
-        with ui.left_drawer(fixed=True):
-            with ui.row().classes("justify-end"):
-                ui.button(
-                    "My files",
-                    icon="arrow_back",
-                    color="primary",
-                    on_click=lambda: ui.navigate.to("/home"),
-                ).classes("w-full")
-                ui.button(
-                    "Export",
-                    icon="save",
-                    color="primary",
-                    on_click=lambda: ui.download(
-                        srt.save_srt(),
-                        filename=f"{srt.filename}.srt",
-                    ),
-                ).classes("w-full")
-                ui.button(
-                    "Revert",
-                    icon="undo",
-                    color="negative",
-                    on_click=lambda: srt.revert_srt(),
-                ).classes("w-full")
+        # Create a toolbar with buttons on the top
+        with ui.row().classes("justify-between items-center"):
+            ui.button(
+                "Export SRT",
+                icon="save",
+                on_click=export_srt,
+            ).props("color=primary")
+            ui.button("Revert", icon="undo").props("color=negative")
+            ui.button("Files", icon="folder").props("color=primary").on_click(
+                lambda: ui.navigate.to("/home")
+            )
 
+        # Split screen in 2/3 and 1/3
+        with ui.row().classes("w-full"):
+            with ui.column().classes("w-2/3"):
+                with ui.card().classes("w-full no-shadow no-border"):
+                    with ui.scroll_area().style("height: calc(100vh - 200px);"):
+                        render_data_table()
 
-
+            with ui.column().classes("w-1/3"):
+                with ui.card().classes("w-full no-shadow no-border"):
+                    ui.label("Preview").classes("text-lg font-semibold")
+                    ui.label(
+                        "This is a preview of the selected subtitle entry. You can edit the text and time range."
+                    ).classes("text-sm text-gray-500")
+                    ui.label(
+                        "Click on a row to expand and edit the subtitle entry."
+                    ).classes("text-sm text-gray-500")
