@@ -1,8 +1,11 @@
 import requests
 from nicegui import ui
 from typing import Optional
+from settings import get_settings
 
-API_URL = "http://localhost:8000/api/v1"
+settings = get_settings()
+
+API_URL = settings.API_URL
 
 
 def page_init(header_text: Optional[str] = "") -> None:
