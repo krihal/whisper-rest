@@ -27,7 +27,7 @@ def get_settings() -> Settings:
     """
 
     # Create static files directory if it doesn't exist
-    if not os.path.exists(get_settings().STATIC_FILES):
-        os.makedirs(get_settings().STATIC_FILES)
+    if not os.path.exists(Settings().STATIC_FILES):
+        os.makedirs(Settings().STATIC_FILES)
 
     return Settings()
