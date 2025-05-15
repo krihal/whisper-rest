@@ -3,18 +3,12 @@ from nicegui import ui, app
 from pages.common import API_URL, page_init
 
 
-def save_file(data: str) -> None:
+def save_file(data: str, filename: str) -> None:
     """
     Save the edited content to a file.
     """
-    filename = ui.input("Enter filename").value
-    if not filename:
-        ui.notify("Filename cannot be empty")
-        return
 
-    with open(filename, "w") as f:
-        f.write(data)
-    ui.notify(f"File saved as {filename}")
+    ui.download(filename, data)
 
 
 # A simple text editor using ui.editor
@@ -26,7 +20,9 @@ def txt_editor(data):
         ui.editor(
             value=data,
         )
-        .style("width: 100%; height: calc(100vh - 100px); white-space: pre-wrap;")
+        .style(
+            "width: 100%; height: calc(100vh - 100px); white-space: pre-wrap; margin-top: 20px;"
+        )
         .classes("no-border no-shadow")
     )
 
@@ -39,6 +35,7 @@ def create() -> None:
         """
         Display the result of the transcription job.
         """
+
         app.add_static_files(url_path="/static", local_directory="static/")
         response = requests.get(f"{API_URL}/transcriber/{uuid}/result")
 
@@ -49,17 +46,16 @@ def create() -> None:
         data = response.content.decode("utf-8")
 
         page_init()
-        txt_editor(data)
 
-        with ui.left_drawer(fixed=True).style("background-color: white;"):
-            with ui.row().classes("justify-end"):
-                ui.button(
-                    "Export",
-                    icon="save",
-                    color="primary",
-                ).classes("w-full")
-                ui.button(
-                    "Revert",
-                    icon="undo",
-                    color="negative",
-                ).classes("w-full")
+        # Create a toolbar with buttons on the top and the text under button icon
+        with ui.row().classes("justify-between items-center"):
+            ui.button("Files", icon="folder").on_click(
+                lambda: ui.navigate.to("/home")
+            ).style("width: 150px;")
+            ui.button(
+                "Export",
+                icon="save",
+                on_click=lambda: save_file(data, filename),
+            ).style("width: 150px;")
+
+        txt_editor(data)

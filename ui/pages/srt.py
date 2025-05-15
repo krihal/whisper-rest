@@ -6,6 +6,10 @@ from pages.common import page_init, API_URL
 expanded_row = None  # Track which row is currently expanded
 edit_inputs = {}  # Store input elements for the currently edited row
 data = []
+edit_panel = None
+video = None
+table = None
+table_page = None
 
 
 def format_time(time_str):
@@ -36,7 +40,7 @@ def is_valid_time(time_str):
             and 0 <= seconds <= 59
             and 0 <= milliseconds <= 999
         )
-    except:
+    except Exception:
         return False
 
 
@@ -71,14 +75,14 @@ def calculate_duration(start_time, end_time):
             return f"{diff_m}m {diff_s}s {ms}ms"
         else:
             return f"{diff_s}s {ms}ms"
-    except:
+    except Exception:
         return "Invalid format"
 
 
 @ui.refreshable
 def render_data_table():
     """Render the data table with expandable rows"""
-    global expanded_row, edit_inputs, data
+    global expanded_row, edit_inputs, data, table
 
     with ui.card().classes("w-full no-shadow no-border"):
         # No data message
@@ -88,96 +92,53 @@ def render_data_table():
                     "text-lg"
                 )
 
-        # Data rows
-        for index, item in enumerate(data):
-            is_expanded = expanded_row == item["index"]
+        with ui.row().classes("w-full items-center justify-between p-2"):
+            table = (
+                ui.table(
+                    rows=data,
+                    columns=[
+                        {
+                            "name": "index",
+                            "label": "Index",
+                            "align": "left",
+                            "field": "index",
+                        },
+                        {
+                            "name": "start_time",
+                            "label": "Start Time",
+                            "align": "left",
+                            "field": "start_time",
+                        },
+                        {
+                            "name": "end_time",
+                            "label": "End Time",
+                            "align": "left",
+                            "field": "end_time",
+                        },
+                        {
+                            "name": "text",
+                            "label": "Text",
+                            "align": "left",
+                            "field": "text",
+                            "style": "text-wrap: wrap; heigh: auto; white-space: pre-line;",
+                        },
+                    ],
+                    row_key="index",
+                )
+                .classes("w-full max-h-50")
+                .style(
+                    "width: 100%; height: calc(100vh - 130px); overflow: auto; box-shadow: none;"
+                )
+            )
 
-            # Main row - clickable to expand/collapse
-            with ui.row().classes(
-                "border-b p-2 hover:bg-gray-50 cursor-pointer"
-            ) as row:
-                row.on("click", lambda e, idx=item["index"]: toggle_expand(idx))
+            with table.add_slot("top-right"):
+                with ui.row().classes("items-center gap-2"):
+                    with ui.input(placeholder="Search").props("type=search").bind_value(
+                        table, "filter"
+                    ).add_slot("append"):
+                        ui.icon("search")
 
-                ui.label(f"{item['index']}").classes("w-16 font-mono")
-
-                with ui.element("div").classes("w-48"):
-                    ui.html(
-                        f"{format_time(item['start_time'])} → {format_time(item['end_time'])}"
-                    )
-
-                ui.label(item["text"]).classes("flex-grow truncate")
-
-            # Expanded content - shows when row is clicked
-            if is_expanded:
-                with ui.card().classes("bg-blue-50 p-4 mb-2"):
-                    # Display mode
-                    if not edit_inputs.get(item["index"]):
-                        with ui.row().classes("gap-4 w-full"):
-                            with ui.column().classes("w-full"):
-                                index_label = ui.label(f"{index + 1}")
-                                ui.label("Time Details").classes("font-bold")
-                                start_time = ui.input(
-                                    "Start time",
-                                    value=item["start_time"],
-                                )
-                                end_time = ui.input("End time", value=item["end_time"])
-                                ui.label(
-                                    f"Duration: {calculate_duration(item['start_time'], item['end_time'])}"
-                                )
-
-                            with ui.column().classes("w-full"):
-                                ui.label("Content").classes("font-bold")
-                                text = ui.textarea(value=item["text"]).classes(
-                                    "bg-white p-2 rounded w-full"
-                                )
-                                ui.label(
-                                    f"Characters: {len(item['text'])} | Words: {len(item['text'].split())}"
-                                )
-
-                        with ui.row().classes("justify-end mt-4"):
-                            ui.button(
-                                "Add new before",
-                                icon="add",
-                                on_click=lambda e: add_new_entry(
-                                    int(index_label.text) - 1
-                                ),
-                            )
-                            ui.button(
-                                "Add new after",
-                                icon="add",
-                                on_click=lambda e: add_new_entry(int(index_label.text)),
-                            )
-                            ui.button(
-                                "Save",
-                                icon="save",
-                                on_click=lambda e: save_edit(
-                                    int(index_label.text),
-                                    text.value,
-                                    start_time.value,
-                                    end_time.value,
-                                ),
-                            ).classes("bg-blue-500")
-                            delete_btn = ui.button(
-                                "Delete",
-                                icon="delete",
-                                color="negative",
-                                on_click=lambda e, idx=item["index"]: delete_entry(
-                                    int(index_label.text) - 1
-                                ),
-                            )
-                            delete_btn.on("click.stop")  # Stop propagation
-
-
-def toggle_expand(index):
-    """Toggle the expanded state of a row"""
-    global expanded_row
-
-    if expanded_row == index:
-        expanded_row = None
-    else:
-        expanded_row = index
-
-    render_data_table.refresh()
+            table.on("rowClick", lambda e: show_edit_panel(e))
 
 
 def save_edit(index, text, start_time, end_time):
@@ -196,8 +157,6 @@ def save_edit(index, text, start_time, end_time):
             item["end_time"] = end_time
             item["text"] = text
             break
-
-    expanded_row = False
 
     ui.notify("Changes saved successfully", type="positive")
     render_data_table.refresh()
@@ -293,6 +252,70 @@ def parse_srt(data):
 
     return parsed_data
 
+def seek_video(row: dict) -> None:
+    """Seek the video to the specified start time"""
+
+    global video
+
+    start_time = row["start_time"].split(",")[0]
+    start_time_parts = start_time.split(":")
+    start_time_seconds = (
+        int(start_time_parts[0]) * 3600
+        + int(start_time_parts[1]) * 60
+        + int(start_time_parts[2])
+    )
+
+    video.seek(start_time_seconds)
+
+
+
+
+def show_edit_panel(event):
+    edit_panel.style("display: block;")
+    edit_panel.clear()
+
+    row = event.args[1]
+
+    seek_video(row)
+
+    with edit_panel as edit:
+        edit.classes("w-full p-4 bg-gray-100")
+        ui.label(f"Edit Subtitle {row["index"]}").classes("text-h6")
+
+        with ui.row().classes("w-full"):
+            start_time = ui.input(
+                label="Start Time",
+                value=row["start_time"],
+                placeholder="HH:MM:SS,mmm",
+            ).classes("col-3")
+            end_time = ui.input(
+                label="End Time",
+                value=row["end_time"],
+                placeholder="HH:MM:SS,mmm",
+            ).classes("col-3")
+
+        with ui.row():
+            text = ui.textarea(
+                label="Text",
+                value=row["text"],
+                placeholder="Subtitle text",
+            ).classes("w-full")
+
+        # Row a little bit further down
+        with ui.row().style("margin-top: 20px;"):
+            ui.button(
+                icon="add_circle",
+                on_click=lambda: add_new_entry(row["index"]),
+            ).props("color=primary")
+            ui.button(
+                icon="delete",
+                on_click=lambda: delete_entry(row["index"]),
+            ).props("color=negative")            
+            ui.button(
+                icon="save",
+                on_click=lambda: save_edit(row["index"], text.value, start_time.value, end_time.value),
+            ).props("color=primary")
+
 
 def export_srt():
     """Export data in SRT format"""
@@ -312,7 +335,7 @@ def create() -> None:
         """
         Display the result of the transcription job.
         """
-        global data
+        global data, edit_panel, video, table, table_page
         page_init()
 
         app.add_static_files(url_path="/static", local_directory="static/")
@@ -325,31 +348,31 @@ def create() -> None:
         data = response.content.decode()
         data = parse_srt(data)
 
-        # Create a toolbar with buttons on the top
+        # Create a toolbar with buttons on the top and the text under button icon
         with ui.row().classes("justify-between items-center"):
+            ui.button("Files", icon="folder").on_click(
+                lambda: ui.navigate.to("/home")
+            ).style("width: 150px;")
             ui.button(
                 "Export SRT",
                 icon="save",
                 on_click=export_srt,
-            ).props("color=primary")
-            ui.button("Revert", icon="undo").props("color=negative")
-            ui.button("Files", icon="folder").props("color=primary").on_click(
-                lambda: ui.navigate.to("/home")
-            )
+            ).style("width: 150px;")
 
         # Split screen in 2/3 and 1/3
-        with ui.row().classes("w-full"):
-            with ui.column().classes("w-2/3"):
-                with ui.card().classes("w-full no-shadow no-border"):
-                    with ui.scroll_area().style("height: calc(100vh - 200px);"):
-                        render_data_table()
+        with ui.splitter(value=70) as splitter:
+            with splitter.before:
+                with ui.card().classes("w-full"):
+                    render_data_table()
 
-            with ui.column().classes("w-1/3"):
-                with ui.card().classes("w-full no-shadow no-border"):
-                    ui.label("Preview").classes("text-lg font-semibold")
-                    ui.label(
-                        "This is a preview of the selected subtitle entry. You can edit the text and time range."
-                    ).classes("text-sm text-gray-500")
-                    ui.label(
-                        "Click on a row to expand and edit the subtitle entry."
-                    ).classes("text-sm text-gray-500")
+            with splitter.after:
+                video = ui.video(
+                    f"/static/{filename}",
+                    autoplay=False,
+                    controls=True,
+                    muted=False,
+                ).style("width: 75%; align-self: center;")
+
+                ui.separator()
+                with ui.row() as edit_panel:
+                    edit_panel.style("display: none;")
