@@ -6,6 +6,7 @@ from settings import get_settings
 settings = get_settings()
 
 API_URL = settings.API_URL
+STATIC_FILES = settings.STATIC_FILES
 
 
 def page_init(header_text: Optional[str] = "") -> None:
@@ -108,7 +109,7 @@ async def upload_file(file):
             ui.notify(f"Error: Failed to upload file {file.name}")
             return
 
-        with open(f"static/{file.name}", "wb") as f:
+        with open(f"{STATIC_FILES}/{file.name}", "wb") as f:
             file.content.seek(0)
             f.write(file.content.read())
     except Exception as e:

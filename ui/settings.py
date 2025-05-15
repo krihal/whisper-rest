@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
 
     DEBUG: bool = True
     API_URL: str = "http://localhost:8000/api/v1"
+    STATIC_FILES: str = "static"
 
 
 @lru_cache
@@ -23,4 +25,9 @@ def get_settings() -> Settings:
     """
     Get the settings for the application.
     """
+
+    # Create static files directory if it doesn't exist
+    if not os.path.exists(get_settings().STATIC_FILES):
+        os.makedirs(get_settings().STATIC_FILES)
+
     return Settings()
