@@ -130,8 +130,6 @@ def get_next_job(url: str) -> dict:
     """
     Get the next job from the API broker.
     """
-    print(f"{api_url}/next")
-
     response = requests.get(f"{api_url}/next")
     response.raise_for_status()
 

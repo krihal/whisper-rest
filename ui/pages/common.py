@@ -1,5 +1,6 @@
+import asyncio
 import requests
-import httpx
+
 from nicegui import ui
 from typing import Optional
 from settings import get_settings
@@ -101,20 +102,29 @@ def table_click(event) -> None:
             )
 
 
+def post_file(file: str, filename: str) -> None:
+    """
+    Post a file to the API.
+    """
+    files_json = {"file": (filename, file.read())}
+    response = requests.post(f"{API_URL}/api/v1/transcriber", files=files_json)
+
+    if response.status_code != 200:
+        raise Exception(f"Failed to upload file: {response.json()['result']['error']}")
+
+    return True
+
+
 async def upload_file(files):
+    """
+    Upload a file to the server.
+    """
     try:
-        for file, name in zip(files.contents, files.names):
-            files_json = {"file": (name, file.read())}
-
-            response = requests.post(f"{API_URL}/api/v1/transcriber", files=files_json)
-
-            if response.status_code != 200:
-                ui.notify(f"Error: Failed to upload file {name}")
-                return
-
-            ui.notify(f"Uploaded: {name}")
+        for file, filename in zip(files.contents, files.names):
+            await asyncio.to_thread(post_file, file, filename)
+            ui.notify(f"Uploaded: {filename}")
     except Exception as e:
-        ui.notify(f"Error: Failed to save file {name}: {e}")
+        ui.notify(f"Error: Failed to save file {filename}: {e}")
         return
 
 
@@ -123,12 +133,17 @@ def table_upload(table) -> None:
     Handle the click event on the Upload button.
     """
     with ui.dialog() as dialog:
-        ui.upload(
-            on_multi_upload=lambda file: upload_file(file),
-            multiple=True,
-            max_files=5,
-            label="Upload file",
-        ).style("width: 100%; align-self: center; border-radius: 10px; height: 50%;")
+        with ui.card().style(
+            "background-color: white; align-self: center; border: 0; width: 100%; height: 30%;"
+        ):
+            ui.upload(
+                on_multi_upload=lambda file: upload_file(file),
+                multiple=True,
+                max_files=5,
+                label="Upload file",
+            ).style(
+                "width: 100%; align-self: center; border-radius: 10px; height: 100%;"
+            )
 
         dialog.open()
 
